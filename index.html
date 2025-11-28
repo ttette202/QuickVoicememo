@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>簡単レコーダー</title>
+    <title>スマホ特化レコーダー v12</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -12,6 +12,7 @@
             margin: 0;
             padding-bottom: 120px;
             overscroll-behavior-y: none;
+            position: relative;
         }
 
         /* ヘッダー */
@@ -37,6 +38,7 @@
         }
         #menuOverlay.open { display: flex; }
         .menu-item { background: rgba(255,255,255,0.1); border: none; color: white; padding: 10px; border-radius: 5px; cursor: pointer; text-align: left; font-size: 14px;}
+        .menu-note { font-size: 10px; color: #ccc; padding-left: 5px; opacity: 0.8; line-height: 1.4; }
 
         /* リストエリア */
         #libraryContainer { padding: 20px 15px; max-width: 800px; margin: 0 auto; }
@@ -49,24 +51,24 @@
         .delete-btn { color: #e74c3c; background: none; border: none; cursor: pointer; text-decoration: underline; padding:0; }
         audio { width: 100%; height: 32px; }
 
-        /* フローティングボタン */
+        /* フローティングボタン (サイズ統一: 70px) */
         .fab-container {
             position: fixed; bottom: 30px; right: 30px;
-            display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 50;
+            display: flex; flex-direction: column; align-items: center; gap: 20px; z-index: 50;
         }
-        #startFab {
-            width: 70px; height: 70px; background-color: #e74c3c; color: white; border-radius: 50%; border: none;
-            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4); font-size: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s;
+        .fab-btn {
+            width: 70px; height: 70px;
+            border-radius: 50%; border: none;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: transform 0.2s;
+            color: white; font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
-        #startFab:active { transform: scale(0.95); }
-        #startFab::before { content: "🎙️"; font-size: 32px; }
-        
-        #addFolderFab {
-            width: 50px; height: 50px; background-color: #3498db; color: white; border-radius: 50%; border: none;
-            box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4); font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s;
-        }
-        #addFolderFab:active { transform: scale(0.95); }
-        #addFolderFab::after { content: "📁+"; font-size: 14px; font-weight: bold; }
+        .fab-btn:active { transform: scale(0.95); }
+        #addFolderFab { background-color: #3498db; font-size: 28px; }
+        #addFolderFab::after { content: "📁+"; font-size: 16px; }
+        #startFab { background-color: #e74c3c; font-size: 32px; }
+        #startFab::before { content: "🎙️"; }
 
         /* オーバーレイ共通 */
         .overlay-screen {
@@ -77,6 +79,16 @@
         }
         .overlay-screen.active { display: flex; animation: fadeIn 0.2s; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ドラッグ＆ドロップ用オーバーレイ */
+        #dropZoneOverlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(52, 152, 219, 0.9); z-index: 300;
+            flex-direction: column; justify-content: center; align-items: center;
+            color: white; font-size: 24px; font-weight: bold; border: 5px dashed white;
+            box-sizing: border-box; pointer-events: none;
+        }
+        #dropZoneOverlay.drag-active { display: flex; }
 
         /* フォルダ選択 */
         .folder-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 500px; max-height: 70vh; overflow-y: auto; }
@@ -101,26 +113,37 @@
 <body>
 
     <header>
-        <h1>簡単レコーダーv10.0</h1>
+        <h1>📱 高機能レコーダー v12</h1>
         <button class="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="menuOverlay">
             <div style="font-size:12px;opacity:0.7;">データ管理</div>
-            <button class="menu-item" onclick="exportData()">📤 Googleドライブへ保存</button>
-            <button class="menu-item" onclick="document.getElementById('fileInput').click()">📥 データを読み込み</button>
-            <input type="file" id="fileInput" accept=".json" onchange="importData(this)" style="display:none;">
+            <button class="menu-item" onclick="exportData()">📤 バックアップ共有</button>
+            
+            <!-- リクエスト通りボタンは維持 -->
+            <button class="menu-item" onclick="document.getElementById('fileInput').click()">📥 データを読み込み (選択)</button>
+            <input type="file" id="fileInput" accept=".json" onchange="handleFileInput(this)" style="display:none;">
+            
+            <div class="menu-note">
+                ※画面にファイルをD&D<br>
+                または Cmd+V でペーストでも<br>
+                読み込めます
+            </div>
         </div>
     </header>
+
+    <!-- ドラッグ＆ドロップ用オーバーレイ -->
+    <div id="dropZoneOverlay">📂 ファイルをドロップして読み込み</div>
 
     <div id="libraryContainer">
         <p style="text-align:center; color:#ccc; margin-top:50px;">録音ボタンを押して開始</p>
     </div>
 
     <div class="fab-container">
-        <button id="addFolderFab" onclick="createNewFolderDirect()" title="新規フォルダ作成"></button>
-        <button id="startFab" onclick="openFolderSelector()" title="録音開始"></button>
+        <button id="addFolderFab" class="fab-btn" onclick="createNewFolderDirect()" title="新規フォルダ作成"></button>
+        <button id="startFab" class="fab-btn" onclick="openFolderSelector()" title="録音開始"></button>
     </div>
 
-    <!-- オーバーレイUI（省略せず記述） -->
+    <!-- オーバーレイUI -->
     <div id="folderOverlay" class="overlay-screen">
         <h3 style="margin-bottom:20px;">どのフォルダで録音しますか？</h3>
         <div id="folderGrid" class="folder-select-grid"></div>
@@ -291,57 +314,130 @@
             tx.oncomplete = () => loadLibrary();
         }};
         
-        // --- データエクスポート（ファイル名指定 & ドライブOPEN） ---
+        // --- 共有機能 (Share API) ---
         const blobToBase64 = (b) => new Promise((r) => { const fr = new FileReader(); fr.onloadend = () => r(fr.result); fr.readAsDataURL(b); });
         
         window.exportData = async () => {
-            toggleMenu(); // メニュー閉じる
-            if(!confirm("データを保存し、Googleドライブを開きます。\n\n1. ファイルがダウンロードされます\n2. 開いたドライブの画面に、そのファイルをアップロードしてください")) return;
-
+            toggleMenu();
             const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readonly');
             const f = await new Promise(r => tx.objectStore(STORE_FOLDERS).getAll().onsuccess = e => r(e.target.result));
             const rec = await new Promise(r => tx.objectStore(STORE_RECORDINGS).getAll().onsuccess = e => r(e.target.result));
             const s = await Promise.all(rec.map(async r => ({...r, blob: await blobToBase64(r.blob)})));
             
-            // ファイル名生成 (MM-DD_HH-MM_YYYY_録音アプリファイル.json)
             const now = new Date();
-            const MM = (now.getMonth() + 1).toString().padStart(2, '0');
-            const DD = now.getDate().toString().padStart(2, '0');
-            const HH = now.getHours().toString().padStart(2, '0');
-            const Min = now.getMinutes().toString().padStart(2, '0');
-            const YYYY = now.getFullYear();
-            const fileName = `${MM}-${DD}_${HH}-${Min}_${YYYY}_録音アプリファイル.json`;
+            const fileName = `${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}-${now.getMinutes().toString().padStart(2,'0')}_${now.getFullYear()}_録音アプリファイル.json`;
 
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(new Blob([JSON.stringify({folders:f, recordings:s})], {type:"application/json"}));
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            const jsonStr = JSON.stringify({folders:f, recordings:s});
+            const file = new File([jsonStr], fileName, { type: "application/json" });
 
-            // ダウンロード開始後、少し待ってからGoogleドライブを開く
-            setTimeout(() => {
-                const driveUrl = "https://drive.google.com/drive/folders/1kaRuX3UtcaEjeaJzAlGRf-79YJSa8JUH?usp=drive_link";
-                window.open(driveUrl, '_blank');
-            }, 1000);
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                try { await navigator.share({ files: [file], title: '録音バックアップ', text: '録音データです' }); } catch (e) { console.log(e); }
+            } else {
+                const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fileName;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                alert("共有メニューが開けないためダウンロードしました");
+            }
         };
 
-        window.importData = (inp) => {
-            if(!inp.files[0]) return;
-            const fr = new FileReader();
-            fr.onload = async (e) => {
+        // --- 読み込み機能統合（D&D, Cmd+V, Input） ---
+
+        // 共通インポート処理 (FileオブジェクトまたはJSONオブジェクトを受け取る)
+        const processImportData = (data) => {
+            // データがJSON文字列（テキスト）の場合はパースする
+            if (typeof data === 'string') {
                 try {
-                    const d = JSON.parse(e.target.result); if(!confirm("現在のデータを上書きしますか？")) return;
-                    const r = await Promise.all(d.recordings.map(async x => ({...x, blob: await (await fetch(x.blob)).blob()})));
-                    const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readwrite');
-                    tx.objectStore(STORE_FOLDERS).clear(); tx.objectStore(STORE_RECORDINGS).clear();
-                    d.folders.forEach(f => tx.objectStore(STORE_FOLDERS).add(f));
-                    r.forEach(x => tx.objectStore(STORE_RECORDINGS).put(x));
-                    tx.oncomplete = () => { alert("完了"); loadLibrary(); toggleMenu(); };
-                } catch(err){ alert("エラー"); }
-            };
-            fr.readAsText(inp.files[0]);
+                    const parsed = JSON.parse(data);
+                    executeDBImport(parsed);
+                } catch(e) {
+                    alert("テキスト形式が正しくありません");
+                }
+                return;
+            }
+
+            // Fileオブジェクトの場合は読み込む
+            if (data instanceof File) {
+                const fr = new FileReader();
+                fr.onload = async (e) => {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        executeDBImport(parsed);
+                    } catch(err) { alert("ファイルの読み込みに失敗しました"); }
+                };
+                fr.readAsText(data);
+                return;
+            }
         };
+
+        // DBへの書き込み実行
+        const executeDBImport = async (d) => {
+            if (!d.folders || !d.recordings) {
+                alert("データ形式が違います（録音アプリのデータではありません）");
+                return;
+            }
+            if(!confirm("現在のデータを上書きして復元しますか？")) return;
+
+            try {
+                const r = await Promise.all(d.recordings.map(async x => ({...x, blob: await (await fetch(x.blob)).blob()})));
+                const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readwrite');
+                tx.objectStore(STORE_FOLDERS).clear(); tx.objectStore(STORE_RECORDINGS).clear();
+                d.folders.forEach(f => tx.objectStore(STORE_FOLDERS).add(f));
+                r.forEach(x => tx.objectStore(STORE_RECORDINGS).put(x));
+                tx.oncomplete = () => { alert("復元完了！"); loadLibrary(); if(document.getElementById('menuOverlay').classList.contains('open')) toggleMenu(); };
+            } catch(e) {
+                console.error(e);
+                alert("データの復元中にエラーが発生しました");
+            }
+        };
+
+        // 1. inputタグからの読み込み
+        window.handleFileInput = (inp) => {
+            if (inp.files && inp.files[0]) {
+                processImportData(inp.files[0]);
+                inp.value = ''; // リセット
+            }
+        };
+
+        // 2. ドラッグ＆ドロップ処理
+        const dropZone = document.getElementById('dropZoneOverlay');
+        document.body.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-active'); });
+        document.body.addEventListener('dragleave', (e) => { if (e.clientX === 0 && e.clientY === 0) dropZone.classList.remove('drag-active'); });
+        document.body.addEventListener('drop', (e) => {
+            e.preventDefault(); dropZone.classList.remove('drag-active');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                const file = e.dataTransfer.files[0];
+                if (file.name.endsWith('.json')) processImportData(file);
+                else alert('対応していないファイル形式です');
+            }
+        });
+
+        // 3. 【新機能】Paste (Cmd+V) 処理
+        document.addEventListener('paste', (e) => {
+            // ファイルがペーストされた場合（Finderなどからコピー）
+            if (e.clipboardData.files.length > 0) {
+                const file = e.clipboardData.files[0];
+                if (file.name.endsWith('.json')) {
+                    e.preventDefault();
+                    processImportData(file);
+                }
+            } 
+            // テキストがペーストされた場合（JSONの中身を直接コピー）
+            else {
+                const text = e.clipboardData.getData('text');
+                if (text && text.trim().startsWith('{')) {
+                    // 簡易チェック：JSONっぽければ読み込み試行
+                    try {
+                        const json = JSON.parse(text);
+                        if (json.folders && json.recordings) {
+                            e.preventDefault();
+                            executeDBImport(json);
+                        }
+                    } catch(e) {
+                        // JSONでなければ無視（通常のペースト動作を阻害しない）
+                    }
+                }
+            }
+        });
+
     </script>
 </body>
 </html>
