@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>スマホ特化レコーダー v12</title>
+    <title>スマホ特化レコーダー v13</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -113,14 +113,19 @@
 <body>
 
     <header>
-        <h1>📱 高機能レコーダー v12</h1>
+        <h1>クイックレコーダーv13</h1>
         <button class="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="menuOverlay">
             <div style="font-size:12px;opacity:0.7;">データ管理</div>
-            <button class="menu-item" onclick="exportData()">📤 バックアップ共有</button>
             
-            <!-- リクエスト通りボタンは維持 -->
-            <button class="menu-item" onclick="document.getElementById('fileInput').click()">📥 データを読み込み (選択)</button>
+            <!-- 共有ボタン (スマホ用) -->
+            <button class="menu-item" onclick="exportData('share')">📤 共有 (ドライブ/LINE)</button>
+            
+            <!-- 確実な保存ボタン (PC/トラブル時用) -->
+            <button class="menu-item" onclick="exportData('download')">💾 端末に保存 (確実)</button>
+
+            <!-- 読み込みボタン -->
+            <button class="menu-item" onclick="document.getElementById('fileInput').click()">📥 データを読み込み</button>
             <input type="file" id="fileInput" accept=".json" onchange="handleFileInput(this)" style="display:none;">
             
             <div class="menu-note">
@@ -131,7 +136,6 @@
         </div>
     </header>
 
-    <!-- ドラッグ＆ドロップ用オーバーレイ -->
     <div id="dropZoneOverlay">📂 ファイルをドロップして読み込み</div>
 
     <div id="libraryContainer">
@@ -143,7 +147,6 @@
         <button id="startFab" class="fab-btn" onclick="openFolderSelector()" title="録音開始"></button>
     </div>
 
-    <!-- オーバーレイUI -->
     <div id="folderOverlay" class="overlay-screen">
         <h3 style="margin-bottom:20px;">どのフォルダで録音しますか？</h3>
         <div id="folderGrid" class="folder-select-grid"></div>
@@ -314,90 +317,101 @@
             tx.oncomplete = () => loadLibrary();
         }};
         
-        // --- 共有機能 (Share API) ---
+        // --- データエクスポート・共有・ダウンロード ---
         const blobToBase64 = (b) => new Promise((r) => { const fr = new FileReader(); fr.onloadend = () => r(fr.result); fr.readAsDataURL(b); });
         
-        window.exportData = async () => {
+        // mode: 'share' | 'download'
+        window.exportData = async (mode) => {
             toggleMenu();
+            
+            // データ準備
             const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readonly');
             const f = await new Promise(r => tx.objectStore(STORE_FOLDERS).getAll().onsuccess = e => r(e.target.result));
             const rec = await new Promise(r => tx.objectStore(STORE_RECORDINGS).getAll().onsuccess = e => r(e.target.result));
             const s = await Promise.all(rec.map(async r => ({...r, blob: await blobToBase64(r.blob)})));
             
+            // ファイル名生成
             const now = new Date();
             const fileName = `${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}-${now.getMinutes().toString().padStart(2,'0')}_${now.getFullYear()}_録音アプリファイル.json`;
 
             const jsonStr = JSON.stringify({folders:f, recordings:s});
             const file = new File([jsonStr], fileName, { type: "application/json" });
 
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try { await navigator.share({ files: [file], title: '録音バックアップ', text: '録音データです' }); } catch (e) { console.log(e); }
+            // 直接ダウンロード関数
+            const forceDownload = () => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(file);
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+
+            if (mode === 'share') {
+                // 共有モード
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: '録音データバックアップ',
+                            text: '録音アプリのバックアップファイルです。'
+                        });
+                    } catch (error) {
+                        // エラー時（キャンセルまたはAPI失敗）
+                        console.log("共有エラー:", error);
+                        // ユーザーがキャンセルしただけなら何もしないが、エラーならダウンロードを提案
+                        // ここでは安全のため「共有がうまくいかなかったのでダウンロードします」とする
+                        alert("共有が完了しなかったため、ファイルを直接ダウンロードします。");
+                        forceDownload();
+                    }
+                } else {
+                    // API非対応
+                    alert("お使いのブラウザでは共有機能が使えません。ファイルを直接ダウンロードします。");
+                    forceDownload();
+                }
             } else {
-                const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fileName;
-                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                alert("共有メニューが開けないためダウンロードしました");
+                // ダウンロードモード (確実)
+                forceDownload();
             }
         };
 
-        // --- 読み込み機能統合（D&D, Cmd+V, Input） ---
-
-        // 共通インポート処理 (FileオブジェクトまたはJSONオブジェクトを受け取る)
+        // --- 読み込み機能 (Input, D&D, Paste) ---
         const processImportData = (data) => {
-            // データがJSON文字列（テキスト）の場合はパースする
             if (typeof data === 'string') {
                 try {
                     const parsed = JSON.parse(data);
                     executeDBImport(parsed);
-                } catch(e) {
-                    alert("テキスト形式が正しくありません");
-                }
+                } catch(e) { alert("テキスト形式が正しくありません"); }
                 return;
             }
-
-            // Fileオブジェクトの場合は読み込む
             if (data instanceof File) {
                 const fr = new FileReader();
                 fr.onload = async (e) => {
                     try {
                         const parsed = JSON.parse(e.target.result);
                         executeDBImport(parsed);
-                    } catch(err) { alert("ファイルの読み込みに失敗しました"); }
+                    } catch(err) { alert("読み込み失敗"); }
                 };
                 fr.readAsText(data);
                 return;
             }
         };
 
-        // DBへの書き込み実行
         const executeDBImport = async (d) => {
-            if (!d.folders || !d.recordings) {
-                alert("データ形式が違います（録音アプリのデータではありません）");
-                return;
-            }
+            if (!d.folders || !d.recordings) { alert("データ形式が違います"); return; }
             if(!confirm("現在のデータを上書きして復元しますか？")) return;
-
             try {
                 const r = await Promise.all(d.recordings.map(async x => ({...x, blob: await (await fetch(x.blob)).blob()})));
                 const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readwrite');
                 tx.objectStore(STORE_FOLDERS).clear(); tx.objectStore(STORE_RECORDINGS).clear();
                 d.folders.forEach(f => tx.objectStore(STORE_FOLDERS).add(f));
                 r.forEach(x => tx.objectStore(STORE_RECORDINGS).put(x));
-                tx.oncomplete = () => { alert("復元完了！"); loadLibrary(); if(document.getElementById('menuOverlay').classList.contains('open')) toggleMenu(); };
-            } catch(e) {
-                console.error(e);
-                alert("データの復元中にエラーが発生しました");
-            }
+                tx.oncomplete = () => { alert("復元完了"); loadLibrary(); if(document.getElementById('menuOverlay').classList.contains('open')) toggleMenu(); };
+            } catch(e) { alert("エラー発生"); }
         };
 
-        // 1. inputタグからの読み込み
-        window.handleFileInput = (inp) => {
-            if (inp.files && inp.files[0]) {
-                processImportData(inp.files[0]);
-                inp.value = ''; // リセット
-            }
-        };
+        window.handleFileInput = (inp) => { if (inp.files && inp.files[0]) { processImportData(inp.files[0]); inp.value = ''; } };
 
-        // 2. ドラッグ＆ドロップ処理
         const dropZone = document.getElementById('dropZoneOverlay');
         document.body.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-active'); });
         document.body.addEventListener('dragleave', (e) => { if (e.clientX === 0 && e.clientY === 0) dropZone.classList.remove('drag-active'); });
@@ -406,38 +420,24 @@
             if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                 const file = e.dataTransfer.files[0];
                 if (file.name.endsWith('.json')) processImportData(file);
-                else alert('対応していないファイル形式です');
+                else alert('対応していない形式です');
             }
         });
 
-        // 3. 【新機能】Paste (Cmd+V) 処理
         document.addEventListener('paste', (e) => {
-            // ファイルがペーストされた場合（Finderなどからコピー）
             if (e.clipboardData.files.length > 0) {
                 const file = e.clipboardData.files[0];
-                if (file.name.endsWith('.json')) {
-                    e.preventDefault();
-                    processImportData(file);
-                }
-            } 
-            // テキストがペーストされた場合（JSONの中身を直接コピー）
-            else {
+                if (file.name.endsWith('.json')) { e.preventDefault(); processImportData(file); }
+            } else {
                 const text = e.clipboardData.getData('text');
                 if (text && text.trim().startsWith('{')) {
-                    // 簡易チェック：JSONっぽければ読み込み試行
                     try {
                         const json = JSON.parse(text);
-                        if (json.folders && json.recordings) {
-                            e.preventDefault();
-                            executeDBImport(json);
-                        }
-                    } catch(e) {
-                        // JSONでなければ無視（通常のペースト動作を阻害しない）
-                    }
+                        if (json.folders && json.recordings) { e.preventDefault(); executeDBImport(json); }
+                    } catch(e){}
                 }
             }
         });
-
     </script>
 </body>
 </html>
