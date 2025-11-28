@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>簡単レコーダー</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding-bottom: 120px;
+            overscroll-behavior-y: none;
+        }
+
+        /* ヘッダー */
+        header {
+            background-color: #fff;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        h1 { margin: 0; font-size: 18px; color: #2c3e50; }
+        .menu-btn { background: none; border: none; font-size: 24px; cursor: pointer; padding: 0; }
+
+        /* ハンバーガーメニュー */
+        #menuOverlay {
+            display: none; position: absolute; top: 55px; right: 10px;
+            background: #2c3e50; color: white; border-radius: 8px; padding: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2); width: 250px; flex-direction: column; gap: 10px; z-index: 100;
+        }
+        #menuOverlay.open { display: flex; }
+        .menu-item { background: rgba(255,255,255,0.1); border: none; color: white; padding: 10px; border-radius: 5px; cursor: pointer; text-align: left; font-size: 14px;}
+
+        /* リストエリア */
+        #libraryContainer { padding: 20px 15px; max-width: 800px; margin: 0 auto; }
+        .folder-section { background: white; border-radius: 12px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .folder-header { background: #ecf0f1; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #2c3e50; }
+        .delete-folder-btn { border: none; background: none; color: #95a5a6; font-size: 18px; cursor: pointer; }
+        .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .list-item:last-child { border-bottom: none; }
+        .item-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #7f8c8d; }
+        .delete-btn { color: #e74c3c; background: none; border: none; cursor: pointer; text-decoration: underline; padding:0; }
+        audio { width: 100%; height: 32px; }
+
+        /* フローティングボタン */
+        .fab-container {
+            position: fixed; bottom: 30px; right: 30px;
+            display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 50;
+        }
+        #startFab {
+            width: 70px; height: 70px; background-color: #e74c3c; color: white; border-radius: 50%; border: none;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4); font-size: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s;
+        }
+        #startFab:active { transform: scale(0.95); }
+        #startFab::before { content: "🎙️"; font-size: 32px; }
+        
+        #addFolderFab {
+            width: 50px; height: 50px; background-color: #3498db; color: white; border-radius: 50%; border: none;
+            box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4); font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s;
+        }
+        #addFolderFab:active { transform: scale(0.95); }
+        #addFolderFab::after { content: "📁+"; font-size: 14px; font-weight: bold; }
+
+        /* オーバーレイ共通 */
+        .overlay-screen {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(44, 62, 80, 0.95); z-index: 200;
+            flex-direction: column; justify-content: center; align-items: center;
+            padding: 20px; box-sizing: border-box; color: white; backdrop-filter: blur(5px);
+        }
+        .overlay-screen.active { display: flex; animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* フォルダ選択 */
+        .folder-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 500px; max-height: 70vh; overflow-y: auto; }
+        .folder-btn { background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3); color: white; padding: 20px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; }
+        .close-overlay-btn { margin-top: 30px; background: none; border: none; color: #ccc; font-size: 16px; text-decoration: underline; cursor: pointer; }
+
+        /* 録音中 */
+        .recording-status { font-size: 24px; margin-bottom: 20px; font-weight: bold; animation: pulseText 1.5s infinite; }
+        .timer-display { font-size: 48px; font-family: monospace; margin-bottom: 50px; }
+        .big-stop-btn { width: 100px; height: 100px; border-radius: 50%; background: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .big-stop-btn div { width: 30px; height: 30px; background: #e74c3c; border-radius: 4px; }
+        @keyframes pulseText { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* レビュー画面 */
+        .review-controls { display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 300px; }
+        .action-btn { padding: 15px; border-radius: 50px; font-size: 16px; font-weight: bold; border: none; cursor: pointer; }
+        .btn-resume { background: #3498db; color: white; }
+        .btn-save { background: #2ecc71; color: white; margin-top: 10px; }
+        .btn-discard { background: transparent; color: #e74c3c; border: 1px solid #e74c3c; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>簡単レコーダーv10.0</h1>
+        <button class="menu-btn" onclick="toggleMenu()">☰</button>
+        <div id="menuOverlay">
+            <div style="font-size:12px;opacity:0.7;">データ管理</div>
+            <button class="menu-item" onclick="exportData()">📤 Googleドライブへ保存</button>
+            <button class="menu-item" onclick="document.getElementById('fileInput').click()">📥 データを読み込み</button>
+            <input type="file" id="fileInput" accept=".json" onchange="importData(this)" style="display:none;">
+        </div>
+    </header>
+
+    <div id="libraryContainer">
+        <p style="text-align:center; color:#ccc; margin-top:50px;">録音ボタンを押して開始</p>
+    </div>
+
+    <div class="fab-container">
+        <button id="addFolderFab" onclick="createNewFolderDirect()" title="新規フォルダ作成"></button>
+        <button id="startFab" onclick="openFolderSelector()" title="録音開始"></button>
+    </div>
+
+    <!-- オーバーレイUI（省略せず記述） -->
+    <div id="folderOverlay" class="overlay-screen">
+        <h3 style="margin-bottom:20px;">どのフォルダで録音しますか？</h3>
+        <div id="folderGrid" class="folder-select-grid"></div>
+        <button class="close-overlay-btn" onclick="closeAllOverlays()">キャンセル</button>
+    </div>
+
+    <div id="recordingOverlay" class="overlay-screen">
+        <div class="recording-status">🔴 録音中...</div>
+        <div class="timer-display" id="timer">00:00</div>
+        <div style="margin-bottom:10px; font-size:14px; opacity:0.7;" id="currentFolderDisplay"></div>
+        <button class="big-stop-btn" onclick="pauseForReview()"><div></div></button>
+    </div>
+
+    <div id="reviewOverlay" class="overlay-screen">
+        <div style="font-size:18px; margin-bottom:30px; color:#ccc;">一時停止中</div>
+        <audio id="previewPlayer" controls style="width:100%; max-width:300px; margin-bottom:30px;"></audio>
+        <div class="review-controls">
+            <button class="action-btn btn-resume" onclick="resumeRecording()">↩️ 再開 (続きから)</button>
+            <button class="action-btn btn-save" onclick="confirmSave()">💾 保存して終了</button>
+            <button class="action-btn btn-discard" onclick="confirmDiscard()">🗑️ 削除して終了</button>
+        </div>
+    </div>
+
+    <script>
+        const DB_NAME = 'VoiceMemoDB_v3';
+        const STORE_FOLDERS = 'folders';
+        const STORE_RECORDINGS = 'recordings';
+        let db;
+
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_FOLDERS)) db.createObjectStore(STORE_FOLDERS, { keyPath: 'name' });
+            if (!db.objectStoreNames.contains(STORE_RECORDINGS)) {
+                const store = db.createObjectStore(STORE_RECORDINGS, { keyPath: 'id', autoIncrement: true });
+                store.createIndex('folder', 'folder', { unique: false });
+            }
+        };
+        request.onsuccess = (e) => { db = e.target.result; loadLibrary(); };
+
+        let mediaRecorder = null, masterAudioChunks = [], targetFolder = "", timerInterval, startTime, elapsedTime = 0, isSaveIntent = false;
+
+        function toggleMenu() { document.getElementById('menuOverlay').classList.toggle('open'); }
+        function closeAllOverlays() { document.querySelectorAll('.overlay-screen').forEach(el => el.classList.remove('active')); }
+
+        function createNewFolderDirect() {
+            const name = prompt("新しいフォルダ名を入力:");
+            if(name && name.trim()) {
+                const tx = db.transaction([STORE_FOLDERS], 'readwrite');
+                tx.objectStore(STORE_FOLDERS).put({ name: name.trim(), createdAt: new Date() });
+                tx.oncomplete = () => loadLibrary();
+            }
+        }
+
+        function openFolderSelector() {
+            const grid = document.getElementById('folderGrid');
+            grid.innerHTML = '';
+            const tx = db.transaction([STORE_FOLDERS], 'readonly');
+            tx.objectStore(STORE_FOLDERS).getAll().onsuccess = (e) => {
+                const folders = e.target.result;
+                if(folders.length === 0) {
+                    const btn = document.createElement('div'); btn.className = 'folder-btn'; btn.style.gridColumn = "1 / -1";
+                    btn.innerHTML = "フォルダがありません<br>タップして作成"; btn.onclick = () => createNewFolderDirect();
+                    grid.appendChild(btn);
+                } else {
+                    folders.forEach(f => {
+                        const btn = document.createElement('div'); btn.className = 'folder-btn'; btn.textContent = f.name;
+                        btn.onclick = () => startRecordingProcess(f.name); grid.appendChild(btn);
+                    });
+                }
+            };
+            document.getElementById('folderOverlay').classList.add('active');
+        }
+
+        async function startRecordingProcess(folderName) {
+            targetFolder = folderName; masterAudioChunks = []; elapsedTime = 0; isSaveIntent = false;
+            closeAllOverlays(); document.getElementById('recordingOverlay').classList.add('active');
+            document.getElementById('currentFolderDisplay').textContent = `フォルダ: ${folderName}`;
+            await startStream();
+        }
+
+        async function startStream() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.addEventListener('dataavailable', e => { if (e.data.size > 0) masterAudioChunks.push(e.data); });
+                mediaRecorder.addEventListener('stop', () => {
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                    if (isSaveIntent) saveToDB();
+                });
+                mediaRecorder.start(); startTimer();
+            } catch(err) { alert("マイク許可が必要です"); closeAllOverlays(); }
+        }
+
+        function pauseForReview() {
+            if(mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.requestData(); mediaRecorder.pause(); stopTimer();
+                setTimeout(() => showReviewScreen(), 100);
+            }
+        }
+
+        function showReviewScreen() {
+            closeAllOverlays(); document.getElementById('reviewOverlay').classList.add('active');
+            const blob = new Blob(masterAudioChunks, { type: 'audio/webm' });
+            document.getElementById('previewPlayer').src = URL.createObjectURL(blob);
+        }
+
+        function resumeRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'paused') {
+                closeAllOverlays(); document.getElementById('recordingOverlay').classList.add('active');
+                mediaRecorder.resume(); startTimer();
+            }
+        }
+
+        function confirmSave() { isSaveIntent = true; closeAllOverlays(); if(mediaRecorder) mediaRecorder.stop(); }
+        function saveToDB() {
+            const blob = new Blob(masterAudioChunks, { type: 'audio/webm' });
+            const tx = db.transaction([STORE_RECORDINGS], 'readwrite');
+            tx.objectStore(STORE_RECORDINGS).add({ blob: blob, folder: targetFolder, date: new Date().toLocaleString() });
+            tx.oncomplete = () => { loadLibrary(); document.getElementById('previewPlayer').src = ''; masterAudioChunks = []; };
+        }
+        function confirmDiscard() { if(confirm("破棄しますか？")) { isSaveIntent = false; if(mediaRecorder) mediaRecorder.stop(); closeAllOverlays(); masterAudioChunks = []; document.getElementById('previewPlayer').src = ''; }}
+
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const diff = Date.now() - startTime + elapsedTime;
+                const m = Math.floor(diff / 60000).toString().padStart(2, '0');
+                const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+                document.getElementById('timer').textContent = `${m}:${s}`;
+            }, 1000);
+        }
+        function stopTimer() { clearInterval(timerInterval); elapsedTime += Date.now() - startTime; }
+
+        function loadLibrary() {
+            const container = document.getElementById('libraryContainer'); container.innerHTML = '';
+            const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readonly');
+            tx.objectStore(STORE_FOLDERS).getAll().onsuccess = (e) => {
+                const folders = e.target.result;
+                if(folders.length === 0) { container.innerHTML = '<p style="text-align:center;color:#999;margin-top:50px;">まずは右下の青いボタンで<br>フォルダを作ってください</p>'; return; }
+                tx.objectStore(STORE_RECORDINGS).getAll().onsuccess = (e2) => {
+                    const recordings = e2.target.result;
+                    folders.forEach(folder => {
+                        const recs = recordings.filter(r => r.folder === folder.name).sort((a,b)=>b.id-a.id);
+                        createFolderSection(container, folder.name, recs);
+                    });
+                };
+            };
+        }
+
+        function createFolderSection(container, name, recs) {
+            const div = document.createElement('div'); div.className = 'folder-section';
+            let listHtml = recs.length ? recs.map(r => `
+                <li class="list-item">
+                    <div class="item-info"><span>${r.date}</span><button class="delete-btn" onclick="deleteRec(${r.id})">削除</button></div>
+                    <audio controls src="${URL.createObjectURL(r.blob)}"></audio>
+                </li>`).join('') : '<div style="padding:15px;color:#ccc;text-align:center;font-size:12px">データなし</div>';
+            div.innerHTML = `<div class="folder-header"><span>📂 ${name}</span><button class="delete-folder-btn" onclick="deleteFolder('${name}')">×</button></div><ul class="recording-list">${listHtml}</ul>`;
+            container.appendChild(div);
+        }
+
+        window.deleteRec = (id) => { if(confirm("削除しますか？")) { const tx = db.transaction([STORE_RECORDINGS], 'readwrite'); tx.objectStore(STORE_RECORDINGS).delete(id); tx.oncomplete = () => loadLibrary(); }};
+        window.deleteFolder = (name) => { if(confirm("フォルダごと削除しますか？")) { 
+            const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readwrite');
+            tx.objectStore(STORE_FOLDERS).delete(name);
+            const idx = tx.objectStore(STORE_RECORDINGS).index('folder');
+            idx.openCursor(IDBKeyRange.only(name)).onsuccess = e => { const c = e.target.result; if(c){ c.delete(); c.continue(); }};
+            tx.oncomplete = () => loadLibrary();
+        }};
+        
+        // --- データエクスポート（ファイル名指定 & ドライブOPEN） ---
+        const blobToBase64 = (b) => new Promise((r) => { const fr = new FileReader(); fr.onloadend = () => r(fr.result); fr.readAsDataURL(b); });
+        
+        window.exportData = async () => {
+            toggleMenu(); // メニュー閉じる
+            if(!confirm("データを保存し、Googleドライブを開きます。\n\n1. ファイルがダウンロードされます\n2. 開いたドライブの画面に、そのファイルをアップロードしてください")) return;
+
+            const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readonly');
+            const f = await new Promise(r => tx.objectStore(STORE_FOLDERS).getAll().onsuccess = e => r(e.target.result));
+            const rec = await new Promise(r => tx.objectStore(STORE_RECORDINGS).getAll().onsuccess = e => r(e.target.result));
+            const s = await Promise.all(rec.map(async r => ({...r, blob: await blobToBase64(r.blob)})));
+            
+            // ファイル名生成 (MM-DD_HH-MM_YYYY_録音アプリファイル.json)
+            const now = new Date();
+            const MM = (now.getMonth() + 1).toString().padStart(2, '0');
+            const DD = now.getDate().toString().padStart(2, '0');
+            const HH = now.getHours().toString().padStart(2, '0');
+            const Min = now.getMinutes().toString().padStart(2, '0');
+            const YYYY = now.getFullYear();
+            const fileName = `${MM}-${DD}_${HH}-${Min}_${YYYY}_録音アプリファイル.json`;
+
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([JSON.stringify({folders:f, recordings:s})], {type:"application/json"}));
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            // ダウンロード開始後、少し待ってからGoogleドライブを開く
+            setTimeout(() => {
+                const driveUrl = "https://drive.google.com/drive/folders/1kaRuX3UtcaEjeaJzAlGRf-79YJSa8JUH?usp=drive_link";
+                window.open(driveUrl, '_blank');
+            }, 1000);
+        };
+
+        window.importData = (inp) => {
+            if(!inp.files[0]) return;
+            const fr = new FileReader();
+            fr.onload = async (e) => {
+                try {
+                    const d = JSON.parse(e.target.result); if(!confirm("現在のデータを上書きしますか？")) return;
+                    const r = await Promise.all(d.recordings.map(async x => ({...x, blob: await (await fetch(x.blob)).blob()})));
+                    const tx = db.transaction([STORE_FOLDERS, STORE_RECORDINGS], 'readwrite');
+                    tx.objectStore(STORE_FOLDERS).clear(); tx.objectStore(STORE_RECORDINGS).clear();
+                    d.folders.forEach(f => tx.objectStore(STORE_FOLDERS).add(f));
+                    r.forEach(x => tx.objectStore(STORE_RECORDINGS).put(x));
+                    tx.oncomplete = () => { alert("完了"); loadLibrary(); toggleMenu(); };
+                } catch(err){ alert("エラー"); }
+            };
+            fr.readAsText(inp.files[0]);
+        };
+    </script>
+</body>
+</html>
