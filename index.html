@@ -3,28 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>タイトル機能付きレコーダー v17</title>
+    <title>Keepレコーダー v21</title>
     <style>
-        /* --- デザイン (v16ベース) --- */
+        /* --- デザイン (v20ベース) --- */
         body { font-family: -apple-system, sans-serif; background: #f4f7f6; color: #333; margin: 0; padding-bottom: 120px; overscroll-behavior-y: none; }
         header { background: #fff; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
         h1 { margin: 0; font-size: 18px; color: #2c3e50; }
         .menu-btn { background: none; border: none; font-size: 24px; cursor: pointer; padding: 0; }
         
-        #menuOverlay { display: none; position: absolute; top: 55px; right: 10px; background: #2c3e50; color: white; border-radius: 8px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); width: 250px; flex-direction: column; gap: 10px; z-index: 100; }
+        #menuOverlay { display: none; position: absolute; top: 55px; right: 10px; background: #2c3e50; color: white; border-radius: 8px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); width: 280px; flex-direction: column; gap: 10px; z-index: 100; }
         #menuOverlay.open { display: flex; }
-        .menu-item { background: rgba(255,255,255,0.1); border: none; color: white; padding: 10px; border-radius: 5px; cursor: pointer; text-align: left; font-size: 14px; }
+        .menu-item { background: rgba(255,255,255,0.1); border: none; color: white; padding: 10px; border-radius: 5px; cursor: pointer; text-align: left; font-size: 14px; width: 100%; box-sizing: border-box; }
+
+        /* スイッチ用スタイル */
+        .switch-container { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px; color: white; font-size: 14px; }
+        .toggle-switch { position: relative; display: inline-block; width: 40px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #3498db; }
+        input:checked + .slider:before { transform: translateX(16px); }
 
         .storage-info { font-size: 12px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px; margin-bottom: 5px; }
         .storage-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; margin-top: 5px; overflow: hidden; }
         .storage-bar-fill { height: 100%; background: #2ecc71; width: 0%; transition: width 0.5s; }
 
         #libraryContainer { padding: 20px 15px; max-width: 800px; margin: 0 auto; }
-        .folder-section { background: white; border-radius: 12px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .folder-section { background: white; border-radius: 12px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: all 0.3s ease; }
         .folder-header { background: #ecf0f1; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #2c3e50; }
+        
+        .folder-actions { display: flex; align-items: center; gap: 10px; }
+        .pin-btn { background: none; border: none; font-size: 18px; cursor: pointer; opacity: 0.3; transition: 0.2s; }
+        .pin-btn.active { opacity: 1; transform: scale(1.2); }
         .delete-folder-btn { border: none; background: none; color: #95a5a6; cursor: pointer; }
+
         .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; }
         .item-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #333; font-weight: 500; }
+        .item-meta { font-size: 11px; color: #999; margin-left: 8px; font-weight: normal; } /* ファイルサイズ用 */
+        
         .delete-btn { color: #e74c3c; background: none; border: none; cursor: pointer; text-decoration: underline; font-size: 12px; }
         audio { width: 100%; height: 32px; }
         .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 20px; z-index: 50; }
@@ -37,7 +53,8 @@
         .folder-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 500px; max-height: 70vh; overflow-y: auto; padding: 20px;}
         .folder-btn { background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3); color: white; padding: 20px; border-radius: 12px; font-weight: bold; cursor: pointer; text-align: center; }
         .close-overlay-btn { margin-top: 30px; background: none; border: none; color: #ccc; text-decoration: underline; cursor: pointer; }
-        .recording-status { font-size: 24px; margin-bottom: 20px; font-weight: bold; }
+        .recording-status { font-size: 24px; margin-bottom: 10px; font-weight: bold; }
+        .quality-badge { font-size: 12px; background: #3498db; padding: 2px 8px; border-radius: 4px; margin-bottom: 20px; display: none; }
         .timer-display { font-size: 48px; font-family: monospace; margin-bottom: 50px; }
         .big-stop-btn { width: 100px; height: 100px; border-radius: 50%; background: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .big-stop-btn div { width: 30px; height: 30px; background: #e74c3c; border-radius: 4px; }
@@ -49,32 +66,28 @@
         #loader { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:999; justify-content:center; align-items:center; color:#333; font-weight:bold; }
         #loader.active { display: flex; }
 
-        /* ロック画面 */
-        #lockScreen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #1a252f; color: white; z-index: 10000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-        }
-        #pinInput {
-            font-size: 24px; padding: 10px; text-align: center; letter-spacing: 5px;
-            border: none; border-bottom: 2px solid white; background: transparent; color: white;
-            width: 150px; margin-bottom: 20px; outline: none;
-        }
-        .unlock-btn {
-            background: #e74c3c; color: white; border: none; padding: 10px 30px; font-size: 16px; border-radius: 50px; font-weight: bold; cursor: pointer;
-        }
+        #lockScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a252f; color: white; z-index: 10000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #pinInput { font-size: 24px; padding: 10px; text-align: center; letter-spacing: 5px; border: none; border-bottom: 2px solid white; background: transparent; color: white; width: 150px; margin-bottom: 20px; outline: none; }
+        .unlock-btn { background: #e74c3c; color: white; border: none; padding: 10px 30px; font-size: 16px; border-radius: 50px; font-weight: bold; cursor: pointer; }
 
-        /* --- タイトル入力欄 --- */
-        #recTitleInput {
-            width: 100%; max-width: 300px; padding: 15px; font-size: 16px; 
-            border-radius: 8px; border: none; outline: none; margin-bottom: 10px;
-            text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
+        #recTitleInput { width: 100%; max-width: 300px; padding: 15px; font-size: 16px; border-radius: 8px; border: none; outline: none; margin-bottom: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
+        /* ゴミ箱 */
+        #trashOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f4f7f6; z-index: 150; overflow-y: auto; padding: 20px; box-sizing: border-box; }
+        #trashOverlay.active { display: block; }
+        .trash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #ddd; }
+        .trash-list { list-style: none; padding: 0; }
+        .trash-item { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 5px solid #7f8c8d; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .trash-info { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 12px; color: #555; }
+        .trash-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .btn-restore { background: #3498db; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-purge { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .empty-trash-btn { background: #c0392b; color: white; border: none; padding: 10px 20px; border-radius: 50px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 20px; }
+
     </style>
 </head>
 <body>
     
-    <!-- 🔒 ロック画面 -->
     <div id="lockScreen">
         <div style="margin-bottom:20px; font-size:40px;">🔒</div>
         <p>パスワードを入力</p>
@@ -84,21 +97,43 @@
     </div>
 
     <header>
-        <h1>☁️ 記録レコーダー v17</h1>
+        <h1>☁️ Keepレコーダー v21</h1>
         <button class="menu-btn" onclick="toggleMenu()">☰</button>
         
         <div id="menuOverlay">
+            <!-- 高音質スイッチ -->
+            <div class="switch-container">
+                <span>💎 高音質モード</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="hqToggle" onchange="toggleHQ(this)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div style="font-size:10px; color:#aaa; margin-bottom:10px;">デフォルト: ON</div>
+
             <div class="storage-info">
                 <div>☁️ 使用量 (目安)</div>
                 <div style="font-size:16px; font-weight:bold; margin:5px 0;" id="usageText">計算中...</div>
                 <div class="storage-bar-bg"><div class="storage-bar-fill" id="usageBar"></div></div>
                 <div style="font-size:10px; opacity:0.7; margin-top:5px;">上限: 5GB (無料枠)</div>
             </div>
+            
+            <button class="menu-item" onclick="openTrash()" style="margin-top:10px;">🗑️ ゴミ箱を見る</button>
             <button class="menu-item" onclick="manualLock()" style="border:1px solid #e74c3c; background:rgba(231,76,60,0.1); color:#e74c3c; margin-top:10px;">🔒 すぐにロックする</button>
         </div>
     </header>
 
     <div id="loader">処理中...</div>
+
+    <div id="trashOverlay">
+        <div class="trash-header">
+            <h2 style="margin:0;">🗑️ ゴミ箱</h2>
+            <button onclick="closeTrash()" style="background:none; border:none; font-size:24px; cursor:pointer;">×</button>
+        </div>
+        <p style="font-size:12px; color:#666; margin-bottom:15px;">※削除から15日経過すると自動的に消去されます。</p>
+        <button class="empty-trash-btn" onclick="emptyTrashAll()">⚠️ ゴミ箱を空にする</button>
+        <ul id="trashList" class="trash-list"></ul>
+    </div>
 
     <div id="libraryContainer">
         <p style="text-align:center; color:#ccc; margin-top:50px;">読み込み中...</p>
@@ -117,6 +152,7 @@
 
     <div id="recordingOverlay" class="overlay-screen">
         <div class="recording-status">🔴 録音中</div>
+        <div id="hqBadge" class="quality-badge">💎 High Quality</div>
         <div class="timer-display" id="timer">00:00</div>
         <div id="currentFolderDisplay" style="margin-bottom:10px; opacity:0.7;"></div>
         <button class="big-stop-btn" onclick="pauseForReview()"><div></div></button>
@@ -126,7 +162,6 @@
         <div style="font-size:18px; margin-bottom:20px;">一時停止中</div>
         <audio id="previewPlayer" controls style="width:100%; max-width:300px; margin-bottom:20px;"></audio>
         
-        <!-- タイトル入力 -->
         <input type="text" id="recTitleInput" placeholder="タイトルを入力 (任意)">
 
         <div class="review-controls">
@@ -138,12 +173,12 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         // ▼▼▼ ここにFirebaseの設定を貼り付けてください ▼▼▼
         const firebaseConfig = {
-  apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
+apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
   authDomain: "web-recorder-37128.firebaseapp.com",
   projectId: "web-recorder-37128",
   storageBucket: "web-recorder-37128.firebasestorage.app",
@@ -156,7 +191,7 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        // --- ロック機能 ---
+        // ロック機能
         const KEEP_UNLOCKED_DURATION = 7 * 24 * 60 * 60 * 1000; 
         const lastUnlockTime = localStorage.getItem('voiceAppLastUnlock');
         if (lastUnlockTime && (Date.now() - parseInt(lastUnlockTime) < KEEP_UNLOCKED_DURATION)) {
@@ -166,17 +201,15 @@
 
         window.checkPin = () => {
             const input = document.getElementById('pinInput');
-            const error = document.getElementById('pinError');
             if(input.value === "1027") {
                 localStorage.setItem('voiceAppLastUnlock', Date.now());
                 document.getElementById('lockScreen').style.display = 'none';
                 initRealtimeListener();
             } else {
-                error.textContent = "パスワードが違います";
+                document.getElementById('pinError').textContent = "パスワードが違います";
                 input.value = "";
             }
         };
-
         window.manualLock = () => {
             if(!confirm("アプリをロックしますか？")) return;
             localStorage.removeItem('voiceAppLastUnlock');
@@ -188,19 +221,47 @@
         window.closeAllOverlays = () => document.querySelectorAll('.overlay-screen').forEach(el => el.classList.remove('active'));
         const loader = document.getElementById('loader');
 
-        let mediaRecorder = null, masterAudioChunks = [], targetFolder = "", timerInterval, startTime, elapsedTime = 0;
+        // --- 高音質設定 (デフォルトONに変更) ---
+        let isHighQuality = true; // デフォルトON
+        
+        // ストレージに明示的に 'false' がある場合のみOFFにする
+        if (localStorage.getItem('voiceAppHQ') === 'false') {
+            isHighQuality = false;
+            document.getElementById('hqToggle').checked = false;
+        } else {
+            // null または 'true' ならON
+            isHighQuality = true;
+            document.getElementById('hqToggle').checked = true;
+        }
 
-        // --- リアルタイムリスナー ---
+        window.toggleHQ = (checkbox) => {
+            isHighQuality = checkbox.checked;
+            localStorage.setItem('voiceAppHQ', isHighQuality);
+        };
+
+        // --- ファイルサイズ表示用 ---
+        function formatBytes(bytes, decimals = 1) {
+            if (!bytes) return '';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        let mediaRecorder = null, masterAudioChunks = [], targetFolder = "", timerInterval, startTime, elapsedTime = 0;
+        let foldersCache = [];
+        let recordingsCache = [];
+
         function initRealtimeListener() {
             const container = document.getElementById('libraryContainer');
             const qRecs = query(collection(db, "recordings"), orderBy("date", "desc"));
-            const qFolders = query(collection(db, "folders"), orderBy("createdAt", "desc"));
-
-            let foldersCache = [];
-            let recordingsCache = [];
+            const qFolders = query(collection(db, "folders"));
 
             const render = () => {
+                checkAutoDelete(recordingsCache);
                 container.innerHTML = '';
+                const activeRecordings = recordingsCache.filter(r => !r.isDeleted);
                 
                 let totalBytes = 0;
                 recordingsCache.forEach(r => { if(r.filesize) totalBytes += r.filesize; });
@@ -211,46 +272,127 @@
                     return;
                 }
                 
+                foldersCache.sort((a, b) => {
+                    if (a.isPinned && !b.isPinned) return -1;
+                    if (!a.isPinned && b.isPinned) return 1;
+                    const timeA = new Date(a.lastUpdatedAt || a.createdAt).getTime();
+                    const timeB = new Date(b.lastUpdatedAt || b.createdAt).getTime();
+                    return timeB - timeA;
+                });
+
                 foldersCache.forEach(folder => {
-                    const recs = recordingsCache.filter(r => r.folder === folder.name);
+                    const recs = activeRecordings.filter(r => r.folder === folder.name);
                     const div = document.createElement('div'); div.className = 'folder-section';
                     
                     let listHtml = recs.length ? recs.map(r => {
-                        // 表示名の生成ロジック
-                        // 指定形式: タイトル名_MM/DD/HH:MM/YYYY
-                        // 古いデータ用のフォールバックも用意
-                        let displayName = r.displayName;
-                        if (!displayName) {
-                             displayName = new Date(r.date).toLocaleString();
-                        }
+                        let displayName = r.displayName || new Date(r.date).toLocaleString();
+                        let sizeStr = formatBytes(r.filesize);
 
                         return `
                         <li class="list-item">
                             <div class="item-info">
-                                <span>${displayName}</span>
-                                <button class="delete-btn" onclick="window.deleteRec('${r.id}', '${r.storagePath}')">削除</button>
+                                <span>${displayName} <span class="item-meta">(${sizeStr})</span></span>
+                                <button class="delete-btn" onclick="window.moveToTrash('${r.id}')">削除</button>
                             </div>
                             <audio controls src="${r.url}" preload="none"></audio>
                         </li>`;
                     }).join('') : '<div style="padding:15px;color:#ccc;text-align:center;font-size:12px">データなし</div>';
                     
+                    const pinClass = folder.isPinned ? "active" : "";
+                    const pinIcon = folder.isPinned ? "📌" : "📍";
+
                     div.innerHTML = `
-                        <div class="folder-header"><span>📂 ${folder.name}</span><button class="delete-folder-btn" onclick="window.deleteFolder('${folder.name}')">×</button></div>
+                        <div class="folder-header">
+                            <div class="folder-actions">
+                                <button class="pin-btn ${pinClass}" onclick="window.togglePin('${folder.id}', ${folder.isPinned})">${pinIcon}</button>
+                                <span>${folder.name}</span>
+                            </div>
+                            <button class="delete-folder-btn" onclick="window.deleteFolder('${folder.name}')">×</button>
+                        </div>
                         <ul style="list-style:none;padding:0;margin:0;">${listHtml}</ul>
                     `;
                     container.appendChild(div);
                 });
             };
 
-            onSnapshot(qFolders, (snap) => {
-                foldersCache = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                render();
-            });
-            onSnapshot(qRecs, (snap) => {
-                recordingsCache = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                render();
-            });
+            onSnapshot(qFolders, (snap) => { foldersCache = snap.docs.map(d => ({id: d.id, ...d.data()})); render(); });
+            onSnapshot(qRecs, (snap) => { recordingsCache = snap.docs.map(d => ({id: d.id, ...d.data()})); render(); });
         }
+
+        async function checkAutoDelete(allRecs) {
+            const now = Date.now();
+            const DAY_15_MS = 15 * 24 * 60 * 60 * 1000;
+            const toDelete = allRecs.filter(r => {
+                if (!r.isDeleted || !r.deletedAt) return false;
+                return (now - new Date(r.deletedAt).getTime()) > DAY_15_MS;
+            });
+            if (toDelete.length > 0) {
+                for (const r of toDelete) await window.deleteRecPermanently(r.id, r.storagePath);
+            }
+        }
+
+        window.openTrash = () => {
+            const trashList = document.getElementById('trashList');
+            trashList.innerHTML = '';
+            const deletedRecs = recordingsCache.filter(r => r.isDeleted);
+            if (deletedRecs.length === 0) {
+                trashList.innerHTML = '<p style="text-align:center;color:#999;">ゴミ箱は空です</p>';
+            } else {
+                deletedRecs.sort((a,b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+                deletedRecs.forEach(r => {
+                    const li = document.createElement('li'); li.className = 'trash-item';
+                    const remainingMs = (15 * 24 * 60 * 60 * 1000) - (Date.now() - new Date(r.deletedAt).getTime());
+                    const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+                    let displayName = r.displayName || new Date(r.date).toLocaleString();
+                    let sizeStr = formatBytes(r.filesize);
+
+                    li.innerHTML = `
+                        <div style="font-weight:bold; margin-bottom:5px;">${displayName} <span style="font-size:11px; color:#999;">(${sizeStr})</span></div>
+                        <div class="trash-info"><span>📂 ${r.folder}</span><span style="color:#e74c3c">あと${remainingDays}日で削除</span></div>
+                        <audio controls src="${r.url}" preload="none" style="width:100%; margin-bottom:10px;"></audio>
+                        <div class="trash-actions">
+                            <button class="btn-restore" onclick="window.restoreRec('${r.id}')">↩️ 復元</button>
+                            <button class="btn-purge" onclick="window.deleteRecPermanently('${r.id}', '${r.storagePath}', true)">🗑️ 完全削除</button>
+                        </div>
+                    `;
+                    trashList.appendChild(li);
+                });
+            }
+            window.toggleMenu();
+            document.getElementById('trashOverlay').classList.add('active');
+        };
+        window.closeTrash = () => document.getElementById('trashOverlay').classList.remove('active');
+        window.moveToTrash = async (id) => {
+            if(!confirm("ゴミ箱へ移動しますか？")) return;
+            loader.classList.add('active');
+            try { await updateDoc(doc(db, "recordings", id), { isDeleted: true, deletedAt: new Date().toISOString() }); } catch(e){ alert(e.message); }
+            loader.classList.remove('active');
+        };
+        window.restoreRec = async (id) => {
+            if(!confirm("復元しますか？")) return;
+            loader.classList.add('active');
+            try { await updateDoc(doc(db, "recordings", id), { isDeleted: false, deletedAt: null }); window.openTrash(); } catch(e){ alert(e.message); }
+            loader.classList.remove('active');
+        };
+        window.deleteRecPermanently = async (id, storagePath, isManual=false) => {
+            if(isManual && !confirm("完全に削除しますか？\n復元できません。")) return;
+            if(isManual) loader.classList.add('active');
+            try {
+                const fileRef = ref(storage, storagePath);
+                await deleteObject(fileRef).catch(e => console.log("File gone"));
+                await deleteDoc(doc(db, "recordings", id));
+                if(isManual) window.openTrash();
+            } catch(e) { if(isManual) alert("削除エラー"); }
+            if(isManual) loader.classList.remove('active');
+        };
+        window.emptyTrashAll = async () => {
+            if(!confirm("ゴミ箱を空にしますか？")) return;
+            loader.classList.add('active');
+            const deletedRecs = recordingsCache.filter(r => r.isDeleted);
+            for (const r of deletedRecs) await window.deleteRecPermanently(r.id, r.storagePath, false);
+            window.openTrash();
+            loader.classList.remove('active');
+        };
 
         function updateStorageDisplay(bytes) {
             const limit = 5 * 1024 * 1024 * 1024; 
@@ -266,31 +408,37 @@
                 loader.classList.add('active');
                 try {
                     await setDoc(doc(db, "folders", name.trim()), {
-                        name: name.trim(),
-                        createdAt: new Date().toISOString()
+                        name: name.trim(), createdAt: new Date().toISOString(), lastUpdatedAt: new Date().toISOString(), isPinned: false
                     });
                 } catch(e) { alert("エラー: " + e.message); }
                 loader.classList.remove('active');
             }
         };
 
+        window.togglePin = async (folderId, currentState) => {
+            try { await updateDoc(doc(db, "folders", folderId), { isPinned: !currentState }); } catch(e) { console.error(e); }
+        };
+
         window.openFolderSelector = () => {
             const grid = document.getElementById('folderGrid');
             grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;">読み込み中...</div>';
             document.getElementById('folderOverlay').classList.add('active');
-
-            import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js").then(({ getDocs, query, collection, orderBy }) => {
-                const q = query(collection(db, "folders"), orderBy("createdAt", "desc"));
-                getDocs(q).then(snap => {
+            import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js").then(({ getDocs, query, collection }) => {
+                getDocs(query(collection(db, "folders"))).then(snap => {
                     grid.innerHTML = '';
                     if(snap.empty) {
                         grid.innerHTML = '<div class="folder-btn" style="grid-column:1/-1" onclick="window.createNewFolderDirect()">フォルダ作成</div>';
                     } else {
-                        snap.forEach(d => {
+                        let folders = snap.docs.map(d => d.data());
+                        folders.sort((a, b) => {
+                            if (a.isPinned && !b.isPinned) return -1;
+                            if (!a.isPinned && b.isPinned) return 1;
+                            return new Date(b.lastUpdatedAt || b.createdAt) - new Date(a.lastUpdatedAt || a.createdAt);
+                        });
+                        folders.forEach(f => {
                             const btn = document.createElement('div');
-                            btn.className = 'folder-btn';
-                            btn.textContent = d.data().name;
-                            btn.onclick = () => startRecordingProcess(d.data().name);
+                            btn.className = 'folder-btn'; btn.textContent = f.name;
+                            btn.onclick = () => startRecordingProcess(f.name);
                             grid.appendChild(btn);
                         });
                     }
@@ -304,9 +452,22 @@
             document.getElementById('recordingOverlay').classList.add('active');
             document.getElementById('currentFolderDisplay').textContent = folderName;
             
+            const badge = document.getElementById('hqBadge');
+            const constraints = { audio: true };
+            
+            if (isHighQuality) {
+                constraints.audio = {
+                    echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2
+                };
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
+
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const options = isHighQuality ? { audioBitsPerSecond: 256000 } : {};
+                mediaRecorder = new MediaRecorder(stream, options);
                 mediaRecorder.addEventListener('dataavailable', e => { if (e.data.size > 0) masterAudioChunks.push(e.data); });
                 mediaRecorder.start();
                 startTimer();
@@ -319,7 +480,7 @@
                 setTimeout(() => {
                     window.closeAllOverlays();
                     document.getElementById('reviewOverlay').classList.add('active');
-                    document.getElementById('recTitleInput').value = ''; // 入力欄リセット
+                    document.getElementById('recTitleInput').value = ''; 
                     const blob = new Blob(masterAudioChunks, { type: 'audio/webm' });
                     document.getElementById('previewPlayer').src = URL.createObjectURL(blob);
                 }, 100);
@@ -334,51 +495,31 @@
             }
         };
 
-        // --- 保存処理 (タイトル付与) ---
         window.confirmSave = async () => {
             if(mediaRecorder) mediaRecorder.stop();
             window.closeAllOverlays();
             loader.classList.add('active');
-
             const titleInput = document.getElementById('recTitleInput').value.trim();
             const title = titleInput || "無題";
-
             try {
                 const blob = new Blob(masterAudioChunks, { type: 'audio/webm' });
                 const fileSize = blob.size; 
                 const fileName = `${Date.now()}.webm`;
                 const storageRef = ref(storage, `audio/${fileName}`);
-
                 await uploadBytes(storageRef, blob);
                 const url = await getDownloadURL(storageRef);
-
-                // 日時フォーマット生成 (MM/DD/HH:MM/YYYY)
                 const now = new Date();
-                const MM = (now.getMonth() + 1).toString().padStart(2, '0');
-                const DD = now.getDate().toString().padStart(2, '0');
-                const HH = now.getHours().toString().padStart(2, '0');
-                const Min = now.getMinutes().toString().padStart(2, '0');
-                const YYYY = now.getFullYear();
-                
-                const dateStr = `${MM}/${DD}/${HH}:${Min}/${YYYY}`;
+                const dateStr = `${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')}/${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}/${now.getFullYear()}`;
                 const fullDisplayName = `${title}_${dateStr}`;
+                const nowISO = now.toISOString();
 
                 await addDoc(collection(db, "recordings"), {
-                    folder: targetFolder,
-                    url: url,
-                    storagePath: `audio/${fileName}`,
-                    filesize: fileSize, 
-                    date: new Date().toISOString(),
-                    title: title,
-                    displayName: fullDisplayName // これを表示に使う
+                    folder: targetFolder, url: url, storagePath: `audio/${fileName}`,
+                    filesize: fileSize, date: nowISO, title: title, displayName: fullDisplayName, isDeleted: false
                 });
-
+                await updateDoc(doc(db, "folders", targetFolder), { lastUpdatedAt: nowISO });
                 masterAudioChunks = [];
-            } catch (e) {
-                alert("保存失敗: " + e.message);
-            } finally {
-                loader.classList.remove('active');
-            }
+            } catch (e) { alert("保存失敗: " + e.message); } finally { loader.classList.remove('active'); }
         };
 
         window.confirmDiscard = () => {
@@ -389,33 +530,13 @@
             }
         };
 
-        window.deleteRec = async (id, storagePath) => {
-            if(!confirm("削除しますか？")) return;
-            loader.classList.add('active');
-            try {
-                const fileRef = ref(storage, storagePath);
-                await deleteObject(fileRef).catch(e => console.log("File gone"));
-                await deleteDoc(doc(db, "recordings", id));
-            } catch(e) { alert("削除エラー: " + e.message); }
-            loader.classList.remove('active');
-        };
-
         window.deleteFolder = async (name) => {
             if(!confirm(`フォルダ「${name}」と中の録音を全て削除しますか？`)) return;
             loader.classList.add('active');
             await deleteDoc(doc(db, "folders", name));
             loader.classList.remove('active');
         };
-
-        function startTimer() {
-            startTime = Date.now();
-            timerInterval = setInterval(() => {
-                const diff = Date.now() - startTime + elapsedTime;
-                const m = Math.floor(diff / 60000).toString().padStart(2, '0');
-                const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
-                document.getElementById('timer').textContent = `${m}:${s}`;
-            }, 1000);
-        }
+        function startTimer() { startTime = Date.now(); timerInterval = setInterval(() => { const diff = Date.now() - startTime + elapsedTime; const m = Math.floor(diff/60000).toString().padStart(2,'0'); const s = Math.floor((diff%60000)/1000).toString().padStart(2,'0'); document.getElementById('timer').textContent = `${m}:${s}`; }, 1000); }
         function stopTimer() { clearInterval(timerInterval); elapsedTime += Date.now() - startTime; }
 
     </script>
