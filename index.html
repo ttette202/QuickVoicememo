@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>webレコーダー v16</title>
+    <title>タイトル機能付きレコーダー v17</title>
     <style>
-        /* --- デザイン (v15ベース) --- */
+        /* --- デザイン (v16ベース) --- */
         body { font-family: -apple-system, sans-serif; background: #f4f7f6; color: #333; margin: 0; padding-bottom: 120px; overscroll-behavior-y: none; }
         header { background: #fff; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
         h1 { margin: 0; font-size: 18px; color: #2c3e50; }
@@ -24,8 +24,8 @@
         .folder-header { background: #ecf0f1; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #2c3e50; }
         .delete-folder-btn { border: none; background: none; color: #95a5a6; cursor: pointer; }
         .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; }
-        .item-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #7f8c8d; }
-        .delete-btn { color: #e74c3c; background: none; border: none; cursor: pointer; text-decoration: underline; }
+        .item-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #333; font-weight: 500; }
+        .delete-btn { color: #e74c3c; background: none; border: none; cursor: pointer; text-decoration: underline; font-size: 12px; }
         audio { width: 100%; height: 32px; }
         .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 20px; z-index: 50; }
         .fab-btn { width: 70px; height: 70px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
@@ -63,6 +63,13 @@
         .unlock-btn {
             background: #e74c3c; color: white; border: none; padding: 10px 30px; font-size: 16px; border-radius: 50px; font-weight: bold; cursor: pointer;
         }
+
+        /* --- タイトル入力欄 --- */
+        #recTitleInput {
+            width: 100%; max-width: 300px; padding: 15px; font-size: 16px; 
+            border-radius: 8px; border: none; outline: none; margin-bottom: 10px;
+            text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body>
@@ -77,7 +84,7 @@
     </div>
 
     <header>
-        <h1>☁️ 鍵付きレコーダー v16</h1>
+        <h1>☁️ 記録レコーダー v17</h1>
         <button class="menu-btn" onclick="toggleMenu()">☰</button>
         
         <div id="menuOverlay">
@@ -87,7 +94,6 @@
                 <div class="storage-bar-bg"><div class="storage-bar-fill" id="usageBar"></div></div>
                 <div style="font-size:10px; opacity:0.7; margin-top:5px;">上限: 5GB (無料枠)</div>
             </div>
-            <!-- 手動ロックボタン -->
             <button class="menu-item" onclick="manualLock()" style="border:1px solid #e74c3c; background:rgba(231,76,60,0.1); color:#e74c3c; margin-top:10px;">🔒 すぐにロックする</button>
         </div>
     </header>
@@ -103,7 +109,6 @@
         <button id="startFab" class="fab-btn" onclick="openFolderSelector()"></button>
     </div>
 
-    <!-- オーバーレイ群 -->
     <div id="folderOverlay" class="overlay-screen">
         <h3>フォルダを選択</h3>
         <div id="folderGrid" class="folder-select-grid"></div>
@@ -118,8 +123,12 @@
     </div>
 
     <div id="reviewOverlay" class="overlay-screen">
-        <div style="font-size:18px; margin-bottom:30px;">一時停止中</div>
-        <audio id="previewPlayer" controls style="width:100%; max-width:300px; margin-bottom:30px;"></audio>
+        <div style="font-size:18px; margin-bottom:20px;">一時停止中</div>
+        <audio id="previewPlayer" controls style="width:100%; max-width:300px; margin-bottom:20px;"></audio>
+        
+        <!-- タイトル入力 -->
+        <input type="text" id="recTitleInput" placeholder="タイトルを入力 (任意)">
+
         <div class="review-controls">
             <button class="action-btn btn-resume" onclick="resumeRecording()">↩️ 再開</button>
             <button class="action-btn btn-save" onclick="confirmSave()">☁️ クラウドに保存</button>
@@ -133,7 +142,8 @@
         import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         // ▼▼▼ ここにFirebaseの設定を貼り付けてください ▼▼▼
-        const firebaseConfig = {apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
+        const firebaseConfig = {
+  apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
   authDomain: "web-recorder-37128.firebaseapp.com",
   projectId: "web-recorder-37128",
   storageBucket: "web-recorder-37128.firebasestorage.app",
@@ -146,17 +156,11 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        // --- 🔐 パスワード自動スキップ機能 ---
-        
-        // 7日間 (ミリ秒)
+        // --- ロック機能 ---
         const KEEP_UNLOCKED_DURATION = 7 * 24 * 60 * 60 * 1000; 
-
-        // 起動時にチェック
         const lastUnlockTime = localStorage.getItem('voiceAppLastUnlock');
         if (lastUnlockTime && (Date.now() - parseInt(lastUnlockTime) < KEEP_UNLOCKED_DURATION)) {
-            // 期限内ならロック画面を隠して起動
             document.getElementById('lockScreen').style.display = 'none';
-            // 少し遅延させてからリスナー開始（DOM読み込み安定のため）
             setTimeout(() => initRealtimeListener(), 100);
         }
 
@@ -164,9 +168,7 @@
             const input = document.getElementById('pinInput');
             const error = document.getElementById('pinError');
             if(input.value === "1027") {
-                // 解除成功：時間を保存
                 localStorage.setItem('voiceAppLastUnlock', Date.now());
-                
                 document.getElementById('lockScreen').style.display = 'none';
                 initRealtimeListener();
             } else {
@@ -175,27 +177,22 @@
             }
         };
 
-        // 手動ロック
         window.manualLock = () => {
             if(!confirm("アプリをロックしますか？")) return;
-            localStorage.removeItem('voiceAppLastUnlock'); // 記憶を消す
-            location.reload(); // 再読み込みしてロック画面へ
+            localStorage.removeItem('voiceAppLastUnlock');
+            location.reload();
         };
-
 
         // UI操作
         window.toggleMenu = () => document.getElementById('menuOverlay').classList.toggle('open');
         window.closeAllOverlays = () => document.querySelectorAll('.overlay-screen').forEach(el => el.classList.remove('active'));
         const loader = document.getElementById('loader');
 
-        // 状態変数
         let mediaRecorder = null, masterAudioChunks = [], targetFolder = "", timerInterval, startTime, elapsedTime = 0;
 
         // --- リアルタイムリスナー ---
         function initRealtimeListener() {
             const container = document.getElementById('libraryContainer');
-            // すでにリスナーが動いていたら重複しないようにするガードは簡易版では省略
-            
             const qRecs = query(collection(db, "recordings"), orderBy("date", "desc"));
             const qFolders = query(collection(db, "folders"), orderBy("createdAt", "desc"));
 
@@ -218,14 +215,24 @@
                     const recs = recordingsCache.filter(r => r.folder === folder.name);
                     const div = document.createElement('div'); div.className = 'folder-section';
                     
-                    let listHtml = recs.length ? recs.map(r => `
+                    let listHtml = recs.length ? recs.map(r => {
+                        // 表示名の生成ロジック
+                        // 指定形式: タイトル名_MM/DD/HH:MM/YYYY
+                        // 古いデータ用のフォールバックも用意
+                        let displayName = r.displayName;
+                        if (!displayName) {
+                             displayName = new Date(r.date).toLocaleString();
+                        }
+
+                        return `
                         <li class="list-item">
                             <div class="item-info">
-                                <span>${new Date(r.date).toLocaleString()}</span>
+                                <span>${displayName}</span>
                                 <button class="delete-btn" onclick="window.deleteRec('${r.id}', '${r.storagePath}')">削除</button>
                             </div>
                             <audio controls src="${r.url}" preload="none"></audio>
-                        </li>`).join('') : '<div style="padding:15px;color:#ccc;text-align:center;font-size:12px">データなし</div>';
+                        </li>`;
+                    }).join('') : '<div style="padding:15px;color:#ccc;text-align:center;font-size:12px">データなし</div>';
                     
                     div.innerHTML = `
                         <div class="folder-header"><span>📂 ${folder.name}</span><button class="delete-folder-btn" onclick="window.deleteFolder('${folder.name}')">×</button></div>
@@ -312,6 +319,7 @@
                 setTimeout(() => {
                     window.closeAllOverlays();
                     document.getElementById('reviewOverlay').classList.add('active');
+                    document.getElementById('recTitleInput').value = ''; // 入力欄リセット
                     const blob = new Blob(masterAudioChunks, { type: 'audio/webm' });
                     document.getElementById('previewPlayer').src = URL.createObjectURL(blob);
                 }, 100);
@@ -326,10 +334,14 @@
             }
         };
 
+        // --- 保存処理 (タイトル付与) ---
         window.confirmSave = async () => {
             if(mediaRecorder) mediaRecorder.stop();
             window.closeAllOverlays();
             loader.classList.add('active');
+
+            const titleInput = document.getElementById('recTitleInput').value.trim();
+            const title = titleInput || "無題";
 
             try {
                 const blob = new Blob(masterAudioChunks, { type: 'audio/webm' });
@@ -340,12 +352,25 @@
                 await uploadBytes(storageRef, blob);
                 const url = await getDownloadURL(storageRef);
 
+                // 日時フォーマット生成 (MM/DD/HH:MM/YYYY)
+                const now = new Date();
+                const MM = (now.getMonth() + 1).toString().padStart(2, '0');
+                const DD = now.getDate().toString().padStart(2, '0');
+                const HH = now.getHours().toString().padStart(2, '0');
+                const Min = now.getMinutes().toString().padStart(2, '0');
+                const YYYY = now.getFullYear();
+                
+                const dateStr = `${MM}/${DD}/${HH}:${Min}/${YYYY}`;
+                const fullDisplayName = `${title}_${dateStr}`;
+
                 await addDoc(collection(db, "recordings"), {
                     folder: targetFolder,
                     url: url,
                     storagePath: `audio/${fileName}`,
                     filesize: fileSize, 
-                    date: new Date().toISOString()
+                    date: new Date().toISOString(),
+                    title: title,
+                    displayName: fullDisplayName // これを表示に使う
                 });
 
                 masterAudioChunks = [];
