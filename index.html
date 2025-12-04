@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Keepレコーダー v21</title>
+    <title>Keepレコーダー v22</title>
     <style>
-        /* --- デザイン (v20ベース) --- */
+        /* --- デザイン (v21ベース) --- */
         body { font-family: -apple-system, sans-serif; background: #f4f7f6; color: #333; margin: 0; padding-bottom: 120px; overscroll-behavior-y: none; }
         header { background: #fff; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
         h1 { margin: 0; font-size: 18px; color: #2c3e50; }
@@ -15,7 +15,6 @@
         #menuOverlay.open { display: flex; }
         .menu-item { background: rgba(255,255,255,0.1); border: none; color: white; padding: 10px; border-radius: 5px; cursor: pointer; text-align: left; font-size: 14px; width: 100%; box-sizing: border-box; }
 
-        /* スイッチ用スタイル */
         .switch-container { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px; color: white; font-size: 14px; }
         .toggle-switch { position: relative; display: inline-block; width: 40px; height: 24px; }
         .toggle-switch input { opacity: 0; width: 0; height: 0; }
@@ -37,12 +36,23 @@
         .pin-btn.active { opacity: 1; transform: scale(1.2); }
         .delete-folder-btn { border: none; background: none; color: #95a5a6; cursor: pointer; }
 
-        .list-item { padding: 12px 15px; border-bottom: 1px solid #eee; }
-        .item-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #333; font-weight: 500; }
-        .item-meta { font-size: 11px; color: #999; margin-left: 8px; font-weight: normal; } /* ファイルサイズ用 */
+        .list-item { padding: 15px; border-bottom: 1px solid #eee; }
+        .item-top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .item-info { font-size: 13px; color: #333; font-weight: 500; }
+        .item-meta { font-size: 11px; color: #999; margin-left: 8px; font-weight: normal; }
         
-        .delete-btn { color: #e74c3c; background: none; border: none; cursor: pointer; text-decoration: underline; font-size: 12px; }
+        /* メモ表示エリア */
+        .item-memo-display {
+            font-size: 12px; color: #555; background: #fff8e1; padding: 8px 12px; 
+            border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #f1c40f;
+            white-space: pre-wrap; /* 改行を反映 */
+        }
+
+        .item-controls { display: flex; align-items: center; gap: 10px; }
+        .icon-btn { background: none; border: none; cursor: pointer; font-size: 16px; padding: 5px; color: #7f8c8d; }
+        .delete-btn { color: #e74c3c; }
         audio { width: 100%; height: 32px; }
+
         .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 20px; z-index: 50; }
         .fab-btn { width: 70px; height: 70px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         #addFolderFab { background: #3498db; font-size: 28px; } #addFolderFab::after { content: "📁+"; font-size: 16px; }
@@ -72,6 +82,9 @@
 
         #recTitleInput { width: 100%; max-width: 300px; padding: 15px; font-size: 16px; border-radius: 8px; border: none; outline: none; margin-bottom: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
+        /* メモ編集オーバーレイ */
+        #memoInputArea { width: 80%; max-width: 400px; height: 150px; padding: 15px; font-size: 16px; border-radius: 8px; border: none; margin-bottom: 20px; resize: none; font-family: sans-serif; }
+
         /* ゴミ箱 */
         #trashOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f4f7f6; z-index: 150; overflow-y: auto; padding: 20px; box-sizing: border-box; }
         #trashOverlay.active { display: block; }
@@ -97,11 +110,10 @@
     </div>
 
     <header>
-        <h1>☁️ Keepレコーダー v21</h1>
+        <h1>☁️ Keepレコーダー v22</h1>
         <button class="menu-btn" onclick="toggleMenu()">☰</button>
         
         <div id="menuOverlay">
-            <!-- 高音質スイッチ -->
             <div class="switch-container">
                 <span>💎 高音質モード</span>
                 <label class="toggle-switch">
@@ -161,13 +173,21 @@
     <div id="reviewOverlay" class="overlay-screen">
         <div style="font-size:18px; margin-bottom:20px;">一時停止中</div>
         <audio id="previewPlayer" controls style="width:100%; max-width:300px; margin-bottom:20px;"></audio>
-        
         <input type="text" id="recTitleInput" placeholder="タイトルを入力 (任意)">
-
         <div class="review-controls">
             <button class="action-btn btn-resume" onclick="resumeRecording()">↩️ 再開</button>
             <button class="action-btn btn-save" onclick="confirmSave()">☁️ クラウドに保存</button>
             <button class="action-btn btn-discard" onclick="confirmDiscard()">🗑️ 破棄</button>
+        </div>
+    </div>
+
+    <!-- メモ編集オーバーレイ -->
+    <div id="memoEditOverlay" class="overlay-screen">
+        <h3>📝 メモを編集</h3>
+        <textarea id="memoInputArea" placeholder="ここにメモを入力..."></textarea>
+        <div class="review-controls">
+            <button class="action-btn btn-save" onclick="saveMemo()">保存</button>
+            <button class="action-btn btn-discard" onclick="closeMemoEditor()">キャンセル</button>
         </div>
     </div>
 
@@ -177,8 +197,8 @@
         import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         // ▼▼▼ ここにFirebaseの設定を貼り付けてください ▼▼▼
-        const firebaseConfig = {
-apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
+          const firebaseConfig = {
+  apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
   authDomain: "web-recorder-37128.firebaseapp.com",
   projectId: "web-recorder-37128",
   storageBucket: "web-recorder-37128.firebasestorage.app",
@@ -221,25 +241,20 @@ apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
         window.closeAllOverlays = () => document.querySelectorAll('.overlay-screen').forEach(el => el.classList.remove('active'));
         const loader = document.getElementById('loader');
 
-        // --- 高音質設定 (デフォルトONに変更) ---
-        let isHighQuality = true; // デフォルトON
-        
-        // ストレージに明示的に 'false' がある場合のみOFFにする
+        // 高音質設定
+        let isHighQuality = true; 
         if (localStorage.getItem('voiceAppHQ') === 'false') {
             isHighQuality = false;
             document.getElementById('hqToggle').checked = false;
         } else {
-            // null または 'true' ならON
             isHighQuality = true;
             document.getElementById('hqToggle').checked = true;
         }
-
         window.toggleHQ = (checkbox) => {
             isHighQuality = checkbox.checked;
             localStorage.setItem('voiceAppHQ', isHighQuality);
         };
 
-        // --- ファイルサイズ表示用 ---
         function formatBytes(bytes, decimals = 1) {
             if (!bytes) return '';
             const k = 1024;
@@ -252,6 +267,7 @@ apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
         let mediaRecorder = null, masterAudioChunks = [], targetFolder = "", timerInterval, startTime, elapsedTime = 0;
         let foldersCache = [];
         let recordingsCache = [];
+        let editingMemoId = null; // メモ編集中のID
 
         function initRealtimeListener() {
             const container = document.getElementById('libraryContainer');
@@ -287,13 +303,20 @@ apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
                     let listHtml = recs.length ? recs.map(r => {
                         let displayName = r.displayName || new Date(r.date).toLocaleString();
                         let sizeStr = formatBytes(r.filesize);
+                        let memoHtml = r.memo ? `<div class="item-memo-display">${r.memo}</div>` : '';
 
                         return `
                         <li class="list-item">
-                            <div class="item-info">
-                                <span>${displayName} <span class="item-meta">(${sizeStr})</span></span>
-                                <button class="delete-btn" onclick="window.moveToTrash('${r.id}')">削除</button>
+                            <div class="item-top-row">
+                                <div class="item-info">
+                                    ${displayName} <span class="item-meta">(${sizeStr})</span>
+                                </div>
+                                <div class="item-controls">
+                                    <button class="icon-btn" onclick="window.openMemoEditor('${r.id}', '${encodeURIComponent(r.memo || '')}')">📝</button>
+                                    <button class="icon-btn delete-btn" onclick="window.moveToTrash('${r.id}')">🗑️</button>
+                                </div>
                             </div>
+                            ${memoHtml}
                             <audio controls src="${r.url}" preload="none"></audio>
                         </li>`;
                     }).join('') : '<div style="padding:15px;color:#ccc;text-align:center;font-size:12px">データなし</div>';
@@ -318,6 +341,29 @@ apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
             onSnapshot(qFolders, (snap) => { foldersCache = snap.docs.map(d => ({id: d.id, ...d.data()})); render(); });
             onSnapshot(qRecs, (snap) => { recordingsCache = snap.docs.map(d => ({id: d.id, ...d.data()})); render(); });
         }
+
+        // --- メモ機能 ---
+        window.openMemoEditor = (id, currentMemoEncoded) => {
+            editingMemoId = id;
+            document.getElementById('memoInputArea').value = decodeURIComponent(currentMemoEncoded);
+            document.getElementById('memoEditOverlay').classList.add('active');
+        };
+
+        window.closeMemoEditor = () => {
+            document.getElementById('memoEditOverlay').classList.remove('active');
+            editingMemoId = null;
+        };
+
+        window.saveMemo = async () => {
+            if (!editingMemoId) return;
+            const text = document.getElementById('memoInputArea').value;
+            loader.classList.add('active');
+            try {
+                await updateDoc(doc(db, "recordings", editingMemoId), { memo: text });
+                window.closeMemoEditor();
+            } catch(e) { alert("保存エラー: " + e.message); }
+            loader.classList.remove('active');
+        };
 
         async function checkAutoDelete(allRecs) {
             const now = Date.now();
@@ -397,8 +443,7 @@ apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
         function updateStorageDisplay(bytes) {
             const limit = 5 * 1024 * 1024 * 1024; 
             const percent = Math.min(100, (bytes / limit) * 100);
-            const usedMB = (bytes / 1024 / 1024).toFixed(1);
-            document.getElementById('usageText').textContent = `${usedMB} MB / 5 GB`;
+            document.getElementById('usageText').textContent = `${(bytes/1024/1024).toFixed(1)} MB / 5 GB`;
             document.getElementById('usageBar').style.width = `${percent}%`;
         }
 
@@ -454,11 +499,8 @@ apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
             
             const badge = document.getElementById('hqBadge');
             const constraints = { audio: true };
-            
             if (isHighQuality) {
-                constraints.audio = {
-                    echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2
-                };
+                constraints.audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 };
                 badge.style.display = 'block';
             } else {
                 badge.style.display = 'none';
@@ -515,7 +557,7 @@ apiKey: "AIzaSyANfuSVeic8GkhnRA107VkdZczHTgw2oEM",
 
                 await addDoc(collection(db, "recordings"), {
                     folder: targetFolder, url: url, storagePath: `audio/${fileName}`,
-                    filesize: fileSize, date: nowISO, title: title, displayName: fullDisplayName, isDeleted: false
+                    filesize: fileSize, date: nowISO, title: title, displayName: fullDisplayName, isDeleted: false, memo: ""
                 });
                 await updateDoc(doc(db, "folders", targetFolder), { lastUpdatedAt: nowISO });
                 masterAudioChunks = [];
